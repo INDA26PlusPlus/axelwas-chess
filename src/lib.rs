@@ -1,12 +1,46 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Place {
     pub row: usize,
     pub file: usize
 }
 
-impl Default for Place {
-    fn default() -> Self {
-        Place { row: 0, file: 0 }
+impl TryFrom<&str> for Place {
+    type Error = ();
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if s.len() != 2 {
+            return Err(());
+        }
+
+        let mut chars = s.chars();
+        let letter = chars.next();
+        let num = chars.next();
+
+        let file = match letter.map(|c| c.to_ascii_uppercase()) {
+            Some('A') => 0,
+            Some('B') => 1,
+            Some('C') => 2,
+            Some('D') => 3,
+            Some('E') => 4,
+            Some('F') => 5,
+            Some('G') => 6,
+            Some('H') => 7,
+            _ => return Err(())
+        };
+
+        let row = match num.map(|n| n.to_digit(10)).ok_or(())?.ok_or(())? {
+            1 => 7,
+            2 => 6,
+            3 => 5,
+            4 => 4,
+            5 => 3,
+            6 => 2,
+            7 => 1,
+            8 => 0,
+            _ => return Err(())
+        };
+
+        Ok(Place { row, file })
     }
 }
 
@@ -26,41 +60,6 @@ impl Place {
             from: *self,
             promotion: None
         }
-    }
-    pub fn from_str(s: &str) -> Option<Self> {
-        if s.len() != 2 {
-            return None;
-        }
-
-        let mut chars = s.chars();
-        let letter = chars.next();
-        let num = chars.next();
-
-        let file = match letter.map(|c| c.to_ascii_uppercase()) {
-            Some('A') => 0,
-            Some('B') => 1,
-            Some('C') => 2,
-            Some('D') => 3,
-            Some('E') => 4,
-            Some('F') => 5,
-            Some('G') => 6,
-            Some('H') => 7,
-            _ => return None
-        };
-
-        let row = match num.map(|n| n.to_digit(10))?? {
-            1 => 7,
-            2 => 6,
-            3 => 5,
-            4 => 4,
-            5 => 3,
-            6 => 2,
-            7 => 1,
-            8 => 0,
-            _ => return None
-        };
-
-        Some(Place { row, file })
     }
 
     /// returns None if it is an invalid Place, as in outside the board
@@ -133,11 +132,13 @@ impl Move {
             
         ret
     }
-    pub fn from_str(s: &str) -> Option<Self> {
-        if s.len() != 4 {
-            return None;
-        }
-        Some(Place::from_str(&s[0..2])?.goto(&Place::from_str(&s[2..4])?))
+
+    fn in_between_and_end(&self) -> Vec<Place> {
+        let mut ret = self.in_between_squares();
+
+        ret.push(self.to);
+
+        ret
     }
 
     pub fn into_promotion(mut self, promotion: Option<PieceTypes>) -> Self {
@@ -146,16 +147,21 @@ impl Move {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum Color {
-    White,
-    Black
+impl TryFrom<&str> for Move {
+    type Error = ();
+    
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        if s.len() != 4 {
+            return Err(());
+        }
+        Ok(Place::try_from(&s[0..2])?.goto(&Place::try_from(&s[2..4])?))
+    }
 }
 
-impl Default for Color {
-    fn default() -> Self {
-        Self::White
-    }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum Color {
+    #[default] White,
+    Black
 }
 
 impl Color {
@@ -170,7 +176,7 @@ impl Color {
 #[derive(Clone, Debug, Copy, PartialEq, Eq, Hash)]
 pub enum PieceTypes {
     Pawn {passantable: bool} ,
-    Rock,
+    Rook,
     Bishop,
     Knight,
     Queen,
@@ -183,23 +189,12 @@ impl Default for PieceTypes {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Default)]
 pub struct Piece {
     pub piece_type: PieceTypes,
     pub place: Place,
     pub color: Color,
     last_moved: usize
-}
-
-impl Default for Piece {
-    fn default() -> Self {
-        Self { 
-            piece_type: PieceTypes::default(), 
-            place: Place::default(), 
-            color: Color::default(), 
-            last_moved: 0 
-        }
-    }
 }
 
 impl Piece {
@@ -216,13 +211,13 @@ impl Piece {
         match (self.color, self.piece_type) {
             (Color::White, PieceTypes::King) => '♔',
             (Color::White, PieceTypes::Queen) => '♕',
-            (Color::White, PieceTypes::Rock) => '♖',
+            (Color::White, PieceTypes::Rook) => '♖',
             (Color::White, PieceTypes::Bishop) => '♗',
             (Color::White, PieceTypes::Knight) => '♘',
             (Color::White, PieceTypes::Pawn { .. }) => '♙',
             (Color::Black, PieceTypes::King) => '♚',
             (Color::Black, PieceTypes::Queen) => '♛',
-            (Color::Black, PieceTypes::Rock) => '♜',
+            (Color::Black, PieceTypes::Rook) => '♜',
             (Color::Black, PieceTypes::Bishop) => '♝',
             (Color::Black, PieceTypes::Knight) => '♞',
             (Color::Black, PieceTypes::Pawn { .. }) => '♟',
@@ -232,13 +227,13 @@ impl Piece {
     pub fn into_ascii(&self) -> char {
         match (self.color, self.piece_type) {
             (Color::White, PieceTypes::Pawn { .. }) => 'P',
-            (Color::White, PieceTypes::Rock) => 'R',
+            (Color::White, PieceTypes::Rook) => 'R',
             (Color::White, PieceTypes::Bishop) => 'B',
             (Color::White, PieceTypes::Knight) => 'N',
             (Color::White, PieceTypes::Queen) => 'Q',
             (Color::White, PieceTypes::King) => 'K',
             (Color::Black, PieceTypes::Pawn { .. }) => 'p',
-            (Color::Black, PieceTypes::Rock) => 'r',
+            (Color::Black, PieceTypes::Rook) => 'r',
             (Color::Black, PieceTypes::Bishop) => 'b',
             (Color::Black, PieceTypes::Knight) => 'n',
             (Color::Black, PieceTypes::Queen) => 'q',
@@ -257,32 +252,32 @@ impl Piece {
         let bottom_left = Place { row: own_row.saturating_add(own_file), file: own_file.saturating_sub(own_file)};
         let top_right = Place { row: own_row.saturating_sub(own_row), file: own_file.saturating_add(own_row)};
             
-        moves.extend(self.place.goto(&top_left).in_between_squares());
-        moves.extend(self.place.goto(&top_right).in_between_squares());
-        moves.extend(self.place.goto(&Place { row: own_row.saturating_add(9), file: own_file.saturating_add(9)}).in_between_squares());
-        moves.extend(self.place.goto(&bottom_left).in_between_squares());
+        moves.extend(self.place.goto(&top_left).in_between_and_end());
+        moves.extend(self.place.goto(&top_right).in_between_and_end());
+        moves.extend(self.place.goto(&bottom_left).in_between_and_end());
+        moves.extend(self.place.goto(&Place { row: own_row.saturating_add(7), file: own_file.saturating_add(7)}).in_between_and_end());
         moves.extend(vec![top_left, top_right, bottom_left]);
 
         moves.into_iter().filter(|s| !s.outside_board()).collect()
     }
 
-    fn rock_moves(&self) -> Vec<Place> {
+    fn rook_moves(&self) -> Vec<Place> {
         let mut moves = Vec::new();
         let own_row = self.place.row;
         let own_file = self.place.file;
         
-        moves.extend(self.place.goto(&Place { row: own_row.saturating_sub(8), file: own_file}).in_between_squares());
-        moves.extend(self.place.goto(&Place { row: own_row, file: own_file.saturating_add(8)}).in_between_squares());
-        moves.extend(self.place.goto(&Place { row: own_row.saturating_add(8), file: own_file}).in_between_squares());
-        moves.extend(self.place.goto(&Place { row: own_row, file: own_file.saturating_sub(8)}).in_between_squares());
+        moves.extend(self.place.goto(&Place { row: own_row.saturating_sub(7), file: own_file}).in_between_and_end());
+        moves.extend(self.place.goto(&Place { row: own_row, file: own_file.saturating_add(7)}).in_between_and_end());
+        moves.extend(self.place.goto(&Place { row: own_row.saturating_add(7), file: own_file}).in_between_and_end());
+        moves.extend(self.place.goto(&Place { row: own_row, file: own_file.saturating_sub(7)}).in_between_and_end());
         
         moves.into_iter().filter(|s| !s.outside_board()).collect()
     }
 
     fn queen_moves(&self) -> Vec<Place> {
-        let mut rock = self.rock_moves();
-        rock.extend(self.bishop_moves());
-        rock
+        let mut rook = self.rook_moves();
+        rook.extend(self.bishop_moves());
+        rook
     }
 
     fn king_moves_basic(&self) -> Vec<Place> {
@@ -439,7 +434,7 @@ impl Piece {
                 moves.push(Move { 
                     from: self.place, 
                     to: candidate, 
-                    promotion: Some(PieceTypes::Rock) 
+                    promotion: Some(PieceTypes::Rook) 
                 });
                 continue;
             }
@@ -474,12 +469,12 @@ impl Piece {
     fn king_moves(&self, position: &Position) -> Vec<Move> {
         let mut moves = self.king_moves_basic();
         if self.last_moved == 0 {
-            let left_rock = position.piece_on(Place { row: self.place.row, file: 0 });
-            if left_rock.is_some_and(|p| p.color == self.color && p.piece_type == PieceTypes::Rock && p.last_moved == 0) {
+            let left_rook = position.piece_on(Place { row: self.place.row, file: 0 });
+            if left_rook.is_some_and(|p| p.color == self.color && p.piece_type == PieceTypes::Rook && p.last_moved == 0) {
                 moves.push(Place { row: self.place.row, file: self.place.file - 2 });
             }
-            let right_rock = position.piece_on(Place { row: self.place.row, file: 7 });
-            if right_rock.is_some_and(|p| p.color == self.color && p.piece_type == PieceTypes::Rock && p.last_moved == 0) {
+            let right_rook = position.piece_on(Place { row: self.place.row, file: 7 });
+            if right_rook.is_some_and(|p| p.color == self.color && p.piece_type == PieceTypes::Rook && p.last_moved == 0) {
                 moves.push(Place { row: self.place.row, file: self.place.file + 2 });
             }
         }
@@ -520,7 +515,7 @@ impl Piece {
     pub fn moves_disregard_check(&self, position: &Position) -> Vec<Move>{
         let nonspecial_moves = match self.piece_type {
             PieceTypes::Bishop => self.bishop_moves(),
-            PieceTypes::Rock => self.rock_moves(),
+            PieceTypes::Rook => self.rook_moves(),
             PieceTypes::Queen => self.queen_moves(),
             PieceTypes::Pawn {..} => Vec::new(),
             PieceTypes::Knight => self.knight_moves(),
@@ -560,16 +555,13 @@ impl Piece {
         }).collect()
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Square {
-    Empty,
+    #[default] Empty,
     Piece(Piece)
 }
 
-impl Default for Square {
-    fn default() -> Self {
-        Self::Empty
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct Position {
@@ -633,7 +625,6 @@ impl Position {
 
     fn theres_obstacle(&self, from: &Place, to: &Place) -> bool {
         let between = from.goto(to).in_between_squares();
-
         for sq in between {
             if let Some(_) = self.piece_on(sq) {
                 return true;
@@ -771,23 +762,23 @@ impl Position {
             return self.move_and_capture(to_move);
         }
 
-        let (to_left, rock) = match to_move.to.file {
+        let (to_left, rook) = match to_move.to.file {
             2 => (true, self.piece_on_mut(Place { row: to_move.to.row, file: 0 })),
             6 => (false, self.piece_on_mut(Place { row: to_move.to.row, file: 7})),
             _ => return Err(self)
         };
 
-        let rock = match rock {
+        let rook = match rook {
             Some(p) => p,
             None => return Err(self)
         };
 
         if to_left {
-            rock.place.file = rock.place.file + 3;
+            rook.place.file = rook.place.file + 3;
         } else {
-            rock.place.file = rock.place.file - 2;
+            rook.place.file = rook.place.file - 2;
         }
-        rock.last_moved = movenr;
+        rook.last_moved = movenr;
 
         self.move_and_capture(to_move)
     }
@@ -835,13 +826,13 @@ impl Position {
             '6' => vec![None; 6],
             '7' => vec![None; 7],
             '8' => vec![None; 8],
-            'r' => vec![Some((Color::Black, PieceTypes::Rock))],
+            'r' => vec![Some((Color::Black, PieceTypes::Rook))],
             'n' => vec![Some((Color::Black, PieceTypes::Knight))],
             'b' => vec![Some((Color::Black, PieceTypes::Bishop))],
             'q' => vec![Some((Color::Black, PieceTypes::Queen))],
             'k' => vec![Some((Color::Black, PieceTypes::King))],
             'p' => vec![Some((Color::Black, PieceTypes::Pawn {passantable: false}))],
-            'R' => vec![Some((Color::White, PieceTypes::Rock))],
+            'R' => vec![Some((Color::White, PieceTypes::Rook))],
             'N' => vec![Some((Color::White, PieceTypes::Knight))],
             'B' => vec![Some((Color::White, PieceTypes::Bishop))],
             'Q' => vec![Some((Color::White, PieceTypes::Queen))],
@@ -865,27 +856,30 @@ impl Position {
             pieces
         })
     }
-
-    pub fn print_position(&self) {
-        
-        for row in 0..8 {
-            for file in 0..8 {
-                print!("{}", self.pieces
-                    .iter()
-                    .filter(|p| p.place == Place { row, file })
-                    .map(|p| p.into_char())
-                    .next()
-                    .unwrap_or('.'));
-                
-            }
-            println!();
-        }
-    }
 }
 
 impl Default for Position {
     fn default() -> Self {
         Self::from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap()
+    }
+}
+
+impl std::fmt::Display for Position {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        
+        for row in 0..8 {
+            for file in 0..8 {
+                write!(f, "{}", self.pieces
+                    .iter()
+                    .filter(|p| p.place == Place { row, file })
+                    .map(|p| p.into_char())
+                    .next()
+                    .unwrap_or('.'))?;
+                
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
     }
 }
 
